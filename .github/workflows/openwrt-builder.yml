@@ -81,16 +81,16 @@ jobs:
           npm_clean: "True"
           os_swap: "True"
 
-      # - name: Freeing up disk space
-      #   uses: easimon/maximize-build-space@master
-      #   with:
-      #     root-reserve-mb: 2048
-      #     swap-size-mb: 1
-      #     remove-dotnet: 'true'
-      #     remove-android: 'true'
-      #     remove-haskell: 'true'
-      #     remove-codeql: 'true'
-      #     remove-docker-images: 'true'
+      - name: Freeing up disk space
+        uses: easimon/maximize-build-space@master
+        with:
+          root-reserve-mb: 20480
+          swap-size-mb: 1
+          # remove-dotnet: 'true'
+          # remove-android: 'true'
+          # remove-haskell: 'true'
+          # remove-codeql: 'true'
+          # remove-docker-images: 'true'
 
       - name: Free up disk space complete
         run: |
@@ -121,10 +121,6 @@ jobs:
       - name: Checkout OpenWrt
         uses: actions/checkout@v3
 
-      # - name: Clone source code
-      #   run: |
-      #     df -hT $PWD
-      #     git clone $REPO_URL -b $REPO_BRANCH openwrt
 
       - name: Checkout private tools
         uses: actions/checkout@v3
