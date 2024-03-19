@@ -10,151 +10,278 @@
 # See /LICENSE for more information.
 #
 
-name: OpenWrt Builder
+name: Brain Firmware Builder
 
 on:
-  repository_dispatch:
-  workflow_dispatch:
+  # schedule:
+  #   - cron: 0 20 * * *
+  push:
+    branches:
+    - main
+    - brain-*
+    - release/*
 
 env:
-  REPO_URL: https://github.com/coolsnowwolf/lede
-  REPO_BRANCH: master
-  FEEDS_CONF: feeds.conf.default
-  CONFIG_FILE: .config
-  DIY_P1_SH: diy-part1.sh
-  DIY_P2_SH: diy-part2.sh
-  UPLOAD_BIN_DIR: false
-  UPLOAD_FIRMWARE: true
+  REPO_URL: https://x-access-token:${{secrets.ORG_CI_TOKEN}}@github.com/epochaudiolabs/lede.git
+  REPO_BRANCH: brain-upto-kernel6.1
+  # 创建pat，并在项目里创建 secrets，包含pat的token字符内容：
+  ci_token: ${{ secrets.ORG_CI_TOKEN }}
   UPLOAD_RELEASE: true
-  TZ: Asia/Shanghai
+
+permissions:
+  actions: write       # Necessary to cancel workflow executions
+  checks: write        # Necessary to write reports
+  pull-requests: write # Necessary to comment on PRs
+  contents: write
+  packages: write
+
 
 jobs:
-  build:
+
+  build_openwrt:
+
+    name: Build OpenWrt Firmware
+
     runs-on: ubuntu-22.04
+    # runs-on: self-hosted
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@main
 
-    - name: Initialization environment
-      env:
-        DEBIAN_FRONTEND: noninteractive
-      run: |
-        sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
-        sudo docker image prune --all --force
-        sudo -E apt-get -qq update
-        sudo -E apt-get -qq install ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential bzip2 ccache cmake cpio curl device-tree-compiler fastjar flex gawk gettext gcc-multilib g++-multilib git gperf haveged help2man intltool libc6-dev-i386 libelf-dev libfuse-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libpython3-dev libreadline-dev libssl-dev libtool lrzsz mkisofs msmtp ninja-build p7zip p7zip-full patch pkgconf python2.7 python3 python3-pyelftools python3-setuptools qemu-utils rsync scons squashfs-tools subversion swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
-        sudo -E apt-get -qq autoremove --purge
-        sudo -E apt-get -qq clean
-        sudo timedatectl set-timezone "$TZ"
-        sudo mkdir -p /workdir
-        sudo chown $USER:$GROUPS /workdir
+      - name: Before freeing up disk space
+        run: |
+          echo "Before freeing up disk space"
+          echo "=============================================================================="
+          df -hT
+          echo "=============================================================================="
+          lsblk -o +vendor,model,label,fstype
+          echo "=============================================================================="
+          cat /proc/cpuinfo
+          echo "=============================================================================="
+          free -m
+          echo "=============================================================================="
 
-    - name: Clone source code
-      working-directory: /workdir
-      run: |
-        df -hT $PWD
-        git clone $REPO_URL -b $REPO_BRANCH openwrt
-        ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
+      - name: "Optimize Disk Space"
+        uses: "hugoalh/disk-space-optimizer-ghaction@v0.8.0"
+        with:
+          operate_sudo: "True"
+          general_include: ".+"
+          general_exclude: |-
+            ^GCC$
+            ^G\+\+$
+            Clang
+            LLVM
+          docker_include: ".+"
+          docker_prune: "True"
+          docker_clean: "True"
+          apt_prune: "True"
+          apt_clean: "True"
+          homebrew_prune: "True"
+          homebrew_clean: "True"
+          npm_prune: "True"
+          npm_clean: "True"
+          os_swap: "True"
 
-    - name: Load custom feeds
-      run: |
-        [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
-        chmod +x $DIY_P1_SH
-        cd openwrt
-        $GITHUB_WORKSPACE/$DIY_P1_SH
+      # - name: Freeing up disk space
+      #   uses: easimon/maximize-build-space@master
+      #   with:
+      #     root-reserve-mb: 2048
+      #     swap-size-mb: 1
+      #     remove-dotnet: 'true'
+      #     remove-android: 'true'
+      #     remove-haskell: 'true'
+      #     remove-codeql: 'true'
+      #     remove-docker-images: 'true'
 
-    - name: Update feeds
-      run: cd openwrt && ./scripts/feeds update -a
+      - name: Free up disk space complete
+        run: |
+          echo "Free up disk space complete"
+          echo "=============================================================================="
+          df -hT
+          echo "=============================================================================="
 
-    - name: Install feeds
-      run: cd openwrt && ./scripts/feeds install -a
 
-    - name: Load custom configuration
-      run: |
-        [ -e files ] && mv files openwrt/files
-        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
-        chmod +x $DIY_P2_SH
-        cd openwrt
-        $GITHUB_WORKSPACE/$DIY_P2_SH
+      - name: Space cleanup and Initialization environment
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          # docker rmi `docker images -q`
+          sudo -E rm -rf /usr/share/dotnet /etc/mysql /etc/php /etc/apt/sources.list.d /usr/local/lib/android
+          sudo -E apt-mark hold grub-efi-amd64-signed
+          sudo -E apt update
+          sudo -E apt -y purge docker* ghc* zulu* llvm* firefox google* openjdk* mysql* php* mongodb* snap*
+          sudo -E apt -y purge dotnet* powershell* || true  # self-hosted runner 上可能不存在
+          sudo -E apt -y purge azure-cli* || true  # self-hosted runner 上可能不存在
+          sudo -E apt -y full-upgrade
+          sudo -E apt -y install ack antlr3 aria2 asciidoc autoconf automake autopoint binutils bison build-essential bzip2 ccache cmake cpio curl device-tree-compiler fastjar flex gawk gettext gcc-multilib g++-multilib git gperf haveged help2man intltool libc6-dev-i386 libelf-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libreadline-dev libssl-dev libtool lrzsz mkisofs msmtp nano ninja-build p7zip p7zip-full patch pkgconf python3 python3-pip libpython3-dev qemu-utils rsync scons squashfs-tools subversion swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
+          sudo -E systemctl daemon-reload
+          sudo -E apt -y autoremove --purge
+          sudo -E apt clean
+          sudo -E timedatectl set-timezone "Asia/Shanghai"
 
-    - name: Download package
-      id: package
-      run: |
-        cd openwrt
-        make defconfig
-        make download -j8
-        find dl -size -1024c -exec ls -l {} \;
-        find dl -size -1024c -exec rm -f {} \;
+      - name: Checkout OpenWrt
+        uses: actions/checkout@v3
 
-    - name: Compile the firmware
-      id: compile
-      run: |
-        cd openwrt
-        echo -e "$(nproc) thread compile"
-        make -j$(nproc) || make -j1 || make -j1 V=s
-        echo "status=success" >> $GITHUB_OUTPUT
-        grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
-        [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
-        echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
+      # - name: Clone source code
+      #   run: |
+      #     df -hT $PWD
+      #     git clone $REPO_URL -b $REPO_BRANCH openwrt
 
-    - name: Check space usage
-      if: (!cancelled())
-      run: df -hT
+      - name: Checkout private tools
+        uses: actions/checkout@v3
+        with:
+          repository: epochaudiolabs/lede
+          ref: '${{ env.REPO_BRANCH }}'
+          token: ${{ secrets.ORG_CI_TOKEN }}
+          path: openwrt
 
-    - name: Upload bin directory
-      uses: actions/upload-artifact@main
-      if: steps.compile.outputs.status == 'success' && env.UPLOAD_BIN_DIR == 'true'
-      with:
-        name: OpenWrt_bin${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
-        path: openwrt/bin
 
-    - name: Organize files
-      id: organize
-      if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
-      run: |
-        cd openwrt/bin/targets/*/*
-        rm -rf packages
-        echo "FIRMWARE=$PWD" >> $GITHUB_ENV
-        echo "status=success" >> $GITHUB_OUTPUT
+      - name: Update feeds
+        run: |
+          cd openwrt
+          # sed -i 's/#src-git helloworld/src-git helloworld/g' ./feeds.conf.default
+          sed -i '/epochaudiolabs/d' ./feeds.conf
+          echo "src-git packages https://x-access-token:${ci_token}@github.com/epochaudiolabs/openwrt-packages.git" >> ./feeds.conf
+          echo "src-git luci https://x-access-token:${ci_token}@github.com/epochaudiolabs/luci.git" >> ./feeds.conf
+          echo "src-git helloworld https://x-access-token:${ci_token}@github.com/epochaudiolabs/helloworld.git" >> ./feeds.conf
+          echo "src-git custom https://x-access-token:${ci_token}@github.com/epochaudiolabs/openwrt-custom-feed.git" >> ./feeds.conf
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
 
-    - name: Upload firmware directory
-      uses: actions/upload-artifact@main
-      if: steps.organize.outputs.status == 'success' && !cancelled()
-      with:
-        name: OpenWrt_firmware${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
-        path: ${{ env.FIRMWARE }}
+      # - name: Generate configuration file
+      #   run: make defconfig
+      ## 使用自定义的 .config
 
-    - name: Generate release tag
-      id: tag
-      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
-      run: |
-        echo "release_tag=$(date +"%Y.%m.%d-%H%M")" >> $GITHUB_OUTPUT
-        touch release.txt
-        [ ${UPLOAD_GOFILE} = true && ${{ steps.gofile.outputs.url }} ] && echo "🔗 [GoFile](${{ steps.gofile.outputs.url }})" >> release.txt
-        echo "status=success" >> $GITHUB_OUTPUT
+      - name: Download packages
+        run: |
+          cd openwrt
+          make download -j16
+          # 下载或更新RoonServer:
+          ./updateRoonCore.sh
 
-    - name: Upload firmware to release
-      uses: softprops/action-gh-release@master
-      if: steps.tag.outputs.status == 'success' && !cancelled()
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ steps.tag.outputs.release_tag }}
-        body_path: release.txt
-        files: ${{ env.FIRMWARE }}/*
+      - name: Cache intermediate results
+        id: cache-compile
+        uses: actions/cache@v3
+        env:
+          cache-name: cache-compile-results
+        with:
+          path: |
+            openwrt/build_dir/host
+            openwrt/build_dir/hostpkg
+            openwrt/build_dir/toolchain-*
+            # openwrt/staging_dir/
+          # key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('.config') }}
+          key: ${{ runner.os }}-build-${{ env.cache-name }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.cache-name }}
+            ${{ runner.os }}-build-${{ env.cache-name }}-
+            ${{ runner.os }}-build-
+            ${{ runner.os }}-
 
-    - name: Delete workflow runs
-      uses: Mattraks/delete-workflow-runs@main
-      with:
-        retain_days: 0
-        keep_minimum_runs: 2
+      - name: Compile firmware
+        run: |
+          cd openwrt
+          # make oldconfig
+          # make -j$(nproc) || make -j1 V=s || make -j1 V=s || make -j1 V=s
 
-    - name: Remove old Releases
-      uses: dev-drprasad/delete-older-releases@master
-      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
-      with:
-        keep_latest: 3
-        delete_tags: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          make -j$(nproc) || \
+          { \
+            git checkout .config ;
+            make -j$(nproc) ;
+            make package/feeds/luci/luci-base/compile ;
+            make package/feeds/luci/luci/compile ;
+            make package/feeds/packages/lm-sensors ;
+            make package/feeds/packages/bc ;
+            make -j1 V=s ;
+          }
+
+          echo "======================="
+          echo "Space usage:"
+          echo "======================="
+          df -h
+          echo "======================="
+          du -h --max-depth=1 ./ --exclude=build_dir --exclude=bin
+          du -h --max-depth=1 ./build_dir
+          du -h --max-depth=1 ./bin
+
+      - name: Prepare artifact
+        run: |
+          cd openwrt
+          mkdir -p ./artifact/package
+          mkdir -p ./artifact/buildinfo
+
+          find ./bin/targets/ -type f -name "feeds.buildinfo" -delete
+          find ./bin/targets/ -type f -iname 'openwrt-*-generic-kernel.bin' -delete
+          find ./bin/targets/ -type f -iname 'openwrt-*-generic-rootfs.tar*' -delete
+          find ./bin/targets/ -type f -iname 'openwrt-*-generic-squashfs-rootfs.img*' -delete
+
+          cp -rf $(find ./bin/targets/ -type f -name "*.buildinfo" -o -name "*.manifest") ./artifact/buildinfo/
+          zip -r -e --password ${{secrets.BRAIN_FW_PASSWD}}  ./artifact/buildinfo.zip  ./artifact/buildinfo/
+          zip -r -e --password ${{secrets.BRAIN_FW_PASSWD}}  ./artifact/packages.zip  ./bin/packages/
+          zip -r -e --password ${{secrets.BRAIN_FW_PASSWD}}  ./artifact/firmware.zip  ./bin/targets/
+
+
+      - name: Upload buildinfo
+        id: upload_buildinfo
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenWrt_buildinfo
+          path: ./openwrt/artifact/buildinfo.zip
+
+      - name: Upload package
+        id: upload_package
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenWrt_package
+          path: ./openwrt/artifact/packages.zip
+
+      - name: Upload firmware
+        id: upload_firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenWrt_firmware
+          path: ./openwrt/artifact/firmware.zip
+
+
+      - name: Generate release tag
+        id: tag
+        if: env.UPLOAD_RELEASE == 'true' && !cancelled()
+        run: |
+          echo "release_tag=$(date +"%Y.%m.%d-%H%M")" >> $GITHUB_OUTPUT
+          touch release.txt
+          echo "🔗 [Firmware](${{ steps.upload_firmware.outputs.artifact-url }})" >> release.txt
+          echo "🔗 [Package](${{ steps.upload_package.outputs.artifact-url }})" >> release.txt
+          echo "🔗 [Buildinfo](${{ steps.upload_buildinfo.outputs.artifact-url }})" >> release.txt
+          echo "🔗 [Firmware](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ steps.upload_firmware.outputs.artifact-id }} )"
+          echo "🔗 [Package](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ steps.upload_package.outputs.artifact-id }} )"
+          echo "🔗 [Buildinfo](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ steps.upload_buildinfo.outputs.artifact-id }} )"
+          echo "status=success" >> $GITHUB_OUTPUT
+
+
+#      - name: Upload firmware to release
+#        uses: softprops/action-gh-release@v2
+#        if: steps.tag.outputs.status == 'success' && !cancelled()
+#        env:
+#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#        with:
+#          tag_name: ${{ steps.tag.outputs.release_tag }}
+#          body_path: release.txt
+#          files: |
+#            ./openwrt/bin/targets/**/**/*squashfs-combined-efi*.img.gz
+#            ./openwrt/bin/targets/**/**/sha256sums
+
+
+      - name: Remove old Releases
+        uses: dev-drprasad/delete-older-releases@master
+        if: env.UPLOAD_RELEASE == 'true' && !cancelled()
+        with:
+          keep_latest: 5
+          delete_tags: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+
+      - name: Delete workflow runs
+        uses: Mattraks/delete-workflow-runs@main
+        with:
+          retain_days: 0
+          keep_minimum_runs: 5
