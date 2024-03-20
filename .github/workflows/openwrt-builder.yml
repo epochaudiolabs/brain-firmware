@@ -244,26 +244,29 @@ jobs:
         run: |
           echo "release_tag=$(date +"%Y.%m.%d-%H%M")" >> $GITHUB_OUTPUT
           touch release.txt
-          echo "🔗 [Firmware](${{ steps.upload_firmware.outputs.artifact-url }})" >> release.txt
-          echo "🔗 [Package](${{ steps.upload_package.outputs.artifact-url }})" >> release.txt
-          echo "🔗 [Buildinfo](${{ steps.upload_buildinfo.outputs.artifact-url }})" >> release.txt
-          echo "🔗 [Firmware](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ steps.upload_firmware.outputs.artifact-id }} )"
-          echo "🔗 [Package](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ steps.upload_package.outputs.artifact-id }} )"
-          echo "🔗 [Buildinfo](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ steps.upload_buildinfo.outputs.artifact-id }} )"
+          # echo "🔗 [Firmware](${{ steps.upload_firmware.outputs.artifact-url }})" >> release.txt
+          # echo "🔗 [Package](${{ steps.upload_package.outputs.artifact-url }})" >> release.txt
+          # echo "🔗 [Buildinfo](${{ steps.upload_buildinfo.outputs.artifact-url }})" >> release.txt
+          # echo "🔗 [Firmware](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ steps.upload_firmware.outputs.artifact-id }} )"
+          # echo "🔗 [Package](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ steps.upload_package.outputs.artifact-id }} )"
+          # echo "🔗 [Buildinfo](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ steps.upload_buildinfo.outputs.artifact-id }} )"
           echo "status=success" >> $GITHUB_OUTPUT
 
 
-#      - name: Upload firmware to release
-#        uses: softprops/action-gh-release@v2
-#        if: steps.tag.outputs.status == 'success' && !cancelled()
-#        env:
-#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#        with:
-#          tag_name: ${{ steps.tag.outputs.release_tag }}
-#          body_path: release.txt
-#          files: |
-#            ./openwrt/bin/targets/**/**/*squashfs-combined-efi*.img.gz
-#            ./openwrt/bin/targets/**/**/sha256sums
+      - name: Upload firmware to release
+        uses: softprops/action-gh-release@v2
+        if: steps.tag.outputs.status == 'success' && !cancelled()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.tag.outputs.release_tag }}
+          body_path: release.txt
+          files: |
+            #  ./openwrt/bin/targets/**/**/*squashfs-combined-efi*.img.gz
+            #  ./openwrt/bin/targets/**/**/sha256sums
+            ./openwrt/artifact/buildinfo.zip
+            ./openwrt/artifact/packages.zip
+            ./openwrt/artifact/firmware.zip
 
 
       - name: Remove old Releases
