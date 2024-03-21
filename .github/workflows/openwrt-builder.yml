@@ -132,8 +132,12 @@ jobs:
 
 
       - name: Update feeds
+        id: update_feeds
         run: |
           cd openwrt
+
+          echo "commit_shasum=$(git log -1 --format='%h')" >> $GITHUB_OUTPUT
+
           # sed -i 's/#src-git helloworld/src-git helloworld/g' ./feeds.conf.default
           sed -i '/epochaudiolabs/d' ./feeds.conf
           echo "src-git packages https://x-access-token:${ci_token}@github.com/epochaudiolabs/openwrt-packages.git" >> ./feeds.conf
@@ -161,9 +165,10 @@ jobs:
           cache-name: cache-compile-results
         with:
           path: |
-            openwrt/build_dir/host
-            openwrt/build_dir/hostpkg
-            openwrt/build_dir/toolchain-*
+            #openwrt/build_dir/host
+            #openwrt/build_dir/hostpkg
+            #openwrt/build_dir/toolchain-*
+            openwrt/build_dir/
             openwrt/staging_dir/
           # key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('.config') }}
           key: ${{ runner.os }}-build-${{ env.cache-name }}
@@ -242,7 +247,7 @@ jobs:
         id: tag
         if: env.UPLOAD_RELEASE == 'true' && !cancelled()
         run: |
-          echo "release_tag=$(date +"%Y.%m.%d-%H%M")" >> $GITHUB_OUTPUT
+          echo "release_time=$(date +"%Y.%m.%d-%H%M")" >> $GITHUB_OUTPUT
           touch release.txt
           # echo "🔗 [Firmware](${{ steps.upload_firmware.outputs.artifact-url }})" >> release.txt
           # echo "🔗 [Package](${{ steps.upload_package.outputs.artifact-url }})" >> release.txt
@@ -259,7 +264,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ steps.tag.outputs.release_tag }}
+          tag_name: ${{ steps.tag.outputs.release_time }}-${{ steps.update_feeds.outputs.commit_shasum }}
           body_path: release.txt
           files: |
             #  ./openwrt/bin/targets/**/**/*squashfs-combined-efi*.img.gz
