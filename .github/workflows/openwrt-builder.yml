@@ -20,6 +20,8 @@ on:
     - main
     - brain-*
     - release/*
+  repository_dispatch:
+    types: [my-event]
 
 env:
   REPO_URL: https://x-access-token:${{secrets.ORG_CI_TOKEN}}@github.com/epochaudiolabs/lede.git
