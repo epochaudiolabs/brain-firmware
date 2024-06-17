@@ -15,6 +15,7 @@ name: Brain Firmware Builder
 on:
   # schedule:
   #   - cron: 0 20 * * *
+  workflow_dispatch:
   push:
     branches:
     - main
