@@ -25,10 +25,10 @@ on:
     types: [my-event]
 
 env:
-  REPO_URL: https://x-access-token:${{secrets.ORG_CI_TOKEN}}@github.com/epochaudiolabs/lede.git
+  REPO_URL: https://x-access-token:${{secrets.ORG_CI_TOKEN_FOR_BRAIN_FW}}@github.com/epochaudiolabs/lede.git
   REPO_BRANCH: brain-upto-kernel6.1
   # 创建pat，并在项目里创建 secrets，包含pat的token字符内容：
-  ci_token: ${{ secrets.ORG_CI_TOKEN }}
+  ci_token: ${{ secrets.ORG_CI_TOKEN_FOR_BRAIN_FW }}
   UPLOAD_RELEASE: true
 
 permissions:
@@ -130,7 +130,7 @@ jobs:
         with:
           repository: epochaudiolabs/lede
           ref: '${{ env.REPO_BRANCH }}'
-          token: ${{ secrets.ORG_CI_TOKEN }}
+          token: ${{ secrets.ORG_CI_TOKEN_FOR_BRAIN_FW }}
           path: openwrt
 
 
